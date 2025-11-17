@@ -1,16 +1,22 @@
-# 目标设备配置（适配 iPhone 7P，iOS 15 为例，根据实际设备修改）
-TARGET = iphone:clang:15.0:13.0  # 目标 iOS 版本（<= 设备系统版本）
-ARCHS = arm64                    # 仅支持 64 位架构（iPhone 7P 适用）
-INSTALL_TARGET_PROCESSES = CameraUI  # 注入相机进程（可改为 SpringBoard 全局生效）
+# 目标系统：iOS 15.0（必须与你的设备系统版本一致）
+TARGET = iphone:clang:15.0:15.0
+# 架构：支持iPhone 6s及以上（iOS 15运行的设备均为64位）
+ARCHS = arm64 arm64e
+# 注入的目标进程（以SpringBoard为例，全局生效，可改为你的目标APP如CameraUI）
+INSTALL_TARGET_PROCESSES = SpringBoard
 
-# 插件名称（自定义，需与 control 文件一致）
+# 插件名称（需与control文件一致）
 TWEAK_NAME = VirtualCamera
 
-# 核心代码文件（你的 Tweak.xm）
+# 核心代码文件（你的Tweak.xm）
 VirtualCamera_FILES = Tweak.xm
 
-# 启用 ARC 内存管理（如果代码中使用了 ARC，必须添加）
+# 启用ARC内存管理（现代Objective-C必备）
 VirtualCamera_CFLAGS = -fobjc-arc
 
-# 关键：正确引用 Theos 的 tweak.mk（通过 THEOS 变量定位）
+# 引用Theos的编译规则（自动处理依赖，包括ElleKit/substrate）
 include $(THEOS)/makefiles/tweak.mk
+
+# 安装后重启目标进程（确保插件生效）
+after-install::
+	install.exec "killall -9 SpringBoard"
