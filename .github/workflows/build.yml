@@ -8,35 +8,35 @@ jobs:
       - name: 拉取代码
         uses: actions/checkout@v4
 
-      - name: 安装基础工具
+      - name: 安装 Xcode 及内置 iOS SDK
         run: |
-          xcode-select --install || true
-          brew install ldid dpkg
+          # 安装 Xcode 13（包含 iOS 15 SDK，与 GitHub 环境兼容）
+          xcode-select -s /Applications/Xcode_13.app || true
+          # 验证 iOS 15 SDK 是否存在（Xcode 内置路径）
+          SDK_PATH="/Applications/Xcode_13.app/Contents/Developer/Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS15.0.sdk"
+          if [ ! -d "$SDK_PATH" ]; then
+            echo "错误：Xcode 未包含 iOS 15 SDK，尝试另一版本"
+            xcode-select -s /Applications/Xcode_13.2.1.app
+            SDK_PATH="/Applications/Xcode_13.2.1.app/Contents/Developer/Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS15.2.sdk"
+          fi
+          # 确认 SDK 路径有效
+          if [ ! -d "$SDK_PATH" ]; then
+            echo "错误：未找到 iOS 15 相关 SDK"
+            exit 1
+          fi
+          echo "找到 iOS SDK：$SDK_PATH"
+          echo "SDK_PATH=$SDK_PATH" >> $GITHUB_ENV  # 保存路径到环境变量
 
-      - name: 安装 Theos（适配 iOS 15）
+      - name: 安装 Theos 及依赖
         run: |
           git clone --recursive https://github.com/theos/theos.git $HOME/theos
           cd $HOME/theos && git submodule update --init --recursive
+          brew install ldid dpkg
 
-      - name: 强制下载 iOS 15.0 SDK（直接指定压缩包）
-        run: |
-          # 直接下载 iOS 15.0 SDK 压缩包（稳定链接）
-          mkdir -p $HOME/iOS-SDKs
-          curl -fL https://github.com/xybp888/iOS-SDKs/releases/download/15.0/iPhoneOS15.0.sdk.tar.xz -o $HOME/iOS-SDKs/iPhoneOS15.0.sdk.tar.xz
-          
-          # 解压 SDK
-          tar -xJf $HOME/iOS-SDKs/iPhoneOS15.0.sdk.tar.xz -C $HOME/iOS-SDKs
-          
-          # 验证 SDK 是否存在
-          if [ ! -d "$HOME/iOS-SDKs/iPhoneOS15.0.sdk" ]; then
-            echo "错误：iOS 15.0 SDK 解压失败"
-            exit 1
-          fi
-
-      - name: 编译插件（适配 iOS 15）
+      - name: 编译插件（使用 Xcode 内置 SDK）
         run: |
           make clean THEOS="$HOME/theos"
-          make package THEOS="$HOME/theos" SDKROOT="$HOME/iOS-SDKs/iPhoneOS15.0.sdk"
+          make package THEOS="$HOME/theos" SDKROOT="${{ env.SDK_PATH }}"
 
       - name: 上传产物
         uses: actions/upload-artifact@v4
