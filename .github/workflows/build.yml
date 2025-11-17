@@ -5,16 +5,27 @@ jobs:
   build:
     runs-on: macos-latest
     steps:
-      - uses: actions/checkout@v4
+      - name: 拉取代码
+        uses: actions/checkout@v4
 
-      - name: 安装 Theos
+      - name: 安装 Theos（国内镜像源，确保克隆成功）
         run: |
-          git clone --recursive https://github.com/theos/theos.git $HOME/theos
-          brew install ldid  # 合并安装步骤，减少冗余
+          # 改用 Gitee 镜像源，解决克隆失败问题
+          git clone --recursive https://gitee.com/ineo6/theos.git $HOME/theos
+          # 验证 Theos 是否安装成功（关键检查步骤）
+          if [ -d "$HOME/theos/bin" ]; then
+            echo "Theos 安装成功"
+            ls $HOME/theos/bin  # 列出 bin 目录，确认 make 存在
+          else
+            echo "Theos 安装失败！"
+            exit 1
+          fi
+          # 安装 ldid
+          brew install ldid
 
-      - name: 编译插件（强制指定 Theos 路径）
+      - name: 编译插件
         run: |
-          # 直接用绝对路径调用 make，避免环境变量问题
+          # 用绝对路径调用 Theos 的 make 工具
           $HOME/theos/bin/make clean THEOS="$HOME/theos"
           $HOME/theos/bin/make package THEOS="$HOME/theos"
 
