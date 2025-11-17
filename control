@@ -1,0 +1,9 @@
+Package: com.yourname.virtualcamera  # 唯一标识（反向域名格式，如com.xxx.tweak）
+Name: VirtualCamera  # 插件名称（与Makefile一致）
+Version: 1.0.0
+Architecture: iphoneos-arm64
+Description: 在线编译的虚拟相机插件
+Depends: mobilesubstrate, preferenceloader  # 必选依赖
+Maintainer: YourName
+Author: YourName
+Section: Tweaks
