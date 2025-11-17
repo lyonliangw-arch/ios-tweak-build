@@ -5,39 +5,34 @@ jobs:
   build:
     runs-on: macos-latest
     steps:
-      - name: 拉取代码
+      - name: 拉取代码（包含本地 libsubstrate.dylib）
         uses: actions/checkout@v4
 
       - name: 安装依赖工具
         run: |
           xcode-select --install || true
-          brew install ldid curl
+          brew install ldid
 
-      - name: 手动搭建环境（强制添加 substrate 库）
+      - name: 搭建环境（使用仓库中的 substrate 库）
         run: |
-          # 创建完整目录（确保 lib 和 include 存在）
+          # 创建 Theos 目录
           mkdir -p $HOME/theos/lib $HOME/theos/include $HOME/theos/makefiles/master
           
-          # 1. 强制下载 substrate 库（多源备份，确保成功）
-          # 源1：GitHub 备份
-          curl -fL https://github.com/xybp888/libsubstrate/releases/download/v1.0/libsubstrate.dylib -o $HOME/theos/lib/libsubstrate.dylib || \
-          # 源2：Gitee 镜像
-          curl -fL https://gitee.com/ios-tweak/libsubstrate/raw/master/libsubstrate.dylib -o $HOME/theos/lib/libsubstrate.dylib || \
-          # 下载失败则报错
-          (echo "substrate 库下载失败"; exit 1)
+          # 1. 复制仓库中的 libsubstrate.dylib 到 Theos 库目录
+          cp ./libs/libsubstrate.dylib $HOME/theos/lib/
           
-          # 2. 下载 substrate 头文件
-          curl -fL https://raw.githubusercontent.com/rpetrich/libsubstrate/master/substrate.h -o $HOME/theos/include/substrate.h || \
+          # 2. 下载 substrate.h 头文件（备用链接）
+          curl -fL https://raw.githubusercontent.com/angelXwind/CydiaSubstrate/master/substrate.h -o $HOME/theos/include/substrate.h || \
+          curl -fL https://gitlab.com/ios-tweak-dev/substrate-headers/-/raw/master/substrate.h -o $HOME/theos/include/substrate.h || \
           (echo "substrate.h 下载失败"; exit 1)
           
           # 3. 验证库文件是否存在
           if [ ! -f "$HOME/theos/lib/libsubstrate.dylib" ]; then
-            echo "错误：libsubstrate.dylib 缺失"
-            ls $HOME/theos/lib  # 打印目录检查
+            echo "错误：未找到 libsubstrate.dylib，请检查仓库中是否上传"
             exit 1
           fi
           
-          # 4. 编写 makefile（确保路径正确）
+          # 4. 编写 makefile
           cat > $HOME/theos/makefiles/tweak.mk << EOF
           include $HOME/theos/makefiles/master/tweak.mk
           EOF
@@ -69,9 +64,9 @@ jobs:
           git clone --depth 1 https://github.com/xybp888/iOS-SDKs.git $HOME/iOS-SDKs
           echo "环境搭建完成"
 
-      - name: 编译插件（显式指定库路径）
+      - name: 编译插件
         run: |
-          make package THEOS="$HOME/theos" SDKROOT="$HOME/iOS-SDKs/iPhoneOS12.4.sdk" LDFLAGS="-L$HOME/theos/lib"
+          make package THEOS="$HOME/theos" SDKROOT="$HOME/iOS-SDKs/iPhoneOS12.4.sdk"
 
       - name: 上传产物
         uses: actions/upload-artifact@v4
