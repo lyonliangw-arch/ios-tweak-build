@@ -13,25 +13,25 @@ jobs:
           xcode-select --install || true
           brew install ldid dpkg
 
-      - name: 安装 Theos 并自动下载 iOS 15 SDK
+      - name: 安装 Theos 并手动下载 iOS 15 SDK
         run: |
           # 克隆 Theos 主仓库
           git clone --recursive https://github.com/theos/theos.git $HOME/theos
           
-          # 使用 Theos 自带的工具下载 iOS 15 SDK（自动适配环境）
-          $HOME/theos/bin/theos-sdk fetch iphoneos 15.0
+          # 手动创建 SDK 目录
+          mkdir -p $HOME/theos/sdks
           
-          # 验证 SDK 是否下载成功
+          # 下载 iOS 15.0 SDK（使用可靠的第三方备份）
+          curl -fL https://github.com/DevForYouTeam/iOS-SDKs/raw/main/iPhoneOS15.0.sdk.tar.xz -o $HOME/theos/sdks/iPhoneOS15.0.sdk.tar.xz || \
+          curl -fL https://mirror.ghproxy.com/https://github.com/xybp888/iOS-SDKs/raw/master/iPhoneOS15.0.sdk.tar.xz -o $HOME/theos/sdks/iPhoneOS15.0.sdk.tar.xz
+          
+          # 解压 SDK
+          tar -xJf $HOME/theos/sdks/iPhoneOS15.0.sdk.tar.xz -C $HOME/theos/sdks
+          
+          # 验证 SDK 是否存在
           SDK_PATH="$HOME/theos/sdks/iPhoneOS15.0.sdk"
           if [ ! -d "$SDK_PATH" ]; then
-            echo "错误：Theos 自动下载 iOS 15 SDK 失败，尝试 15.2 版本"
-            $HOME/theos/bin/theos-sdk fetch iphoneos 15.2
-            SDK_PATH="$HOME/theos/sdks/iPhoneOS15.2.sdk"
-          fi
-          
-          # 确认 SDK 存在
-          if [ ! -d "$SDK_PATH" ]; then
-            echo "错误：所有 iOS 15 SDK 版本均下载失败"
+            echo "错误：iOS 15.0 SDK 解压失败"
             exit 1
           fi
           echo "SDK_PATH=$SDK_PATH" >> $GITHUB_ENV
