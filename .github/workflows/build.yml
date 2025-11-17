@@ -1,4 +1,4 @@
-name: Build Tweak
+name: Build iOS 15 Tweak
 on: [push]
 
 jobs:
@@ -8,81 +8,36 @@ jobs:
       - name: 拉取代码
         uses: actions/checkout@v4
 
-      - name: 安装依赖工具
+      - name: 安装基础工具
         run: |
-          xcode-select --install || true
-          brew install ldid curl file
+          xcode-select --install || true  # 确保clang编译器可用
+          brew install ldid dpkg          # 签名工具和打包工具
 
-      - name: 搭建环境（使用稳定备份链接）
+      - name: 安装Theos（适配iOS 15）
         run: |
-          # 创建目录
-          mkdir -p $HOME/theos/{lib,include,makefiles/master}
-          
-          # 1. 下载 libsubstrate.dylib（使用可靠备份源）
-          # 备份源1（GitLab）
-          curl -fL --retry 3 https://gitlab.com/ios-tweak-dev/libhooker-backup/-/raw/main/libhooker.dylib -o $HOME/theos/lib/libsubstrate.dylib || \
-          # 备份源2（Gitee）
-          curl -fL --retry 3 https://gitee.com/ios-tweak/libhooker-backup/raw/main/libhooker.dylib -o $HOME/theos/lib/libsubstrate.dylib || \
-          (echo "所有源均下载失败，请手动上传libsubstrate.dylib"; exit 1)
-          
-          # 验证库文件有效性
-          if ! file $HOME/theos/lib/libsubstrate.dylib | grep -q "Mach-O 64-bit dynamically linked shared library arm64"; then
-            echo "错误：libsubstrate.dylib 无效"
-            file $HOME/theos/lib/libsubstrate.dylib
-            exit 1
-          fi
-          
-          # 2. 下载 substrate.h 头文件（备份源）
-          curl -fL --retry 3 https://gitee.com/ios-tweak/substrate-headers/raw/main/substrate.h -o $HOME/theos/include/substrate.h || \
-          (echo "substrate.h 下载失败"; exit 1)
-          
-          # 3. 验证 Tweak.xm
-          if [ ! -f "Tweak.xm" ] || ! file "Tweak.xm" | grep -q "ASCII text"; then
-            echo "错误：Tweak.xm 无效"
-            exit 1
-          fi
-          
-          # 4. 编写 makefile（同上）
-          cat > $HOME/theos/makefiles/tweak.mk << EOF
-          include $HOME/theos/makefiles/master/tweak.mk
-          EOF
-          
-          cat > $HOME/theos/makefiles/master/tweak.mk << EOF
-          TWEAK_NAME ?= VirtualCamera
-          \$(TWEAK_NAME)_FILES ?= Tweak.xm
-          \$(TWEAK_NAME)_CFLAGS ?= -fobjc-arc -x objective-c++
-          \$(TWEAK_NAME)_LIBRARIES ?= substrate
-          \$(TWEAK_NAME)_INSTALL_PATH = /Library/MobileSubstrate/DynamicLibraries
-          
-          all: \$(TWEAK_NAME).dylib
-          \$(TWEAK_NAME).dylib: \$(\$(TWEAK_NAME)_FILES)
-          	clang -dynamiclib -arch arm64 -isysroot \$(SDKROOT) \
-          	-framework Foundation -framework UIKit \
-          	-I\$(THEOS)/include -L\$(THEOS)/lib \
-          	-l\$(\$(TWEAK_NAME)_LIBRARIES) \$(\$(TWEAK_NAME)_CFLAGS) \$^ -o \$@
-          	ldid -S \$@
-          
-          package: \$(TWEAK_NAME).dylib
-          	mkdir -p packages/DEBIAN
-          	mkdir -p packages/\$(\$(TWEAK_NAME)_INSTALL_PATH)
-          	cp \$(TWEAK_NAME).dylib packages/\$(\$(TWEAK_NAME)_INSTALL_PATH)/
-          	cp control packages/DEBIAN/
-          	dpkg-deb -b packages \$(TWEAK_NAME)_1.0.0_iphoneos-arm64.deb
-          EOF
-          
-          # 5. 下载 iOS SDK
+          # 克隆Theos主仓库（含最新适配）
+          git clone --recursive https://github.com/theos/theos.git $HOME/theos
+          # 更新子模块（确保iOS 15支持文件完整）
+          cd $HOME/theos && git submodule update --init --recursive
+
+      - name: 安装iOS 15 SDK
+        run: |
+          # 下载iOS 15.0 SDK（适配你的系统版本）
           git clone --depth 1 https://github.com/xybp888/iOS-SDKs.git $HOME/iOS-SDKs
-          if [ ! -d "$HOME/iOS-SDKs/iPhoneOS12.4.sdk" ]; then
-            echo "错误：iOS SDK 缺失"
+          # 验证SDK是否存在
+          if [ ! -d "$HOME/iOS-SDKs/iPhoneOS15.0.sdk" ]; then
+            echo "错误：iOS 15 SDK 缺失"
             exit 1
           fi
 
-      - name: 编译插件
+      - name: 编译插件（适配iOS 15）
         run: |
-          make package THEOS="$HOME/theos" SDKROOT="$HOME/iOS-SDKs/iPhoneOS12.4.sdk"
+          # 显式指定Theos路径和SDK路径
+          make clean THEOS="$HOME/theos"
+          make package THEOS="$HOME/theos" SDKROOT="$HOME/iOS-SDKs/iPhoneOS15.0.sdk"
 
-      - name: 上传产物
+      - name: 上传编译产物
         uses: actions/upload-artifact@v4
         with:
-          name: tweak-deb
-          path: ./*.deb
+          name: ios15-tweak-deb
+          path: packages/*.deb
