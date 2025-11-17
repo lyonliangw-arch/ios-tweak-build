@@ -7,4 +7,4 @@ TWEAK_NAME = VirtualCamera  # 插件名称（自定义）
 VirtualCamera_FILES = Tweak.xm  # 核心代码文件
 VirtualCamera_CFLAGS = -fobjc-arc  # 启用ARC（代码用了ARC才需要）
 
-include $(THEOS_MAKE_PATH)/tweak.mk
+include $(THEOS)/makefiles/tweak.mk
