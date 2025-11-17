@@ -8,32 +8,31 @@ jobs:
       - name: 拉取代码
         uses: actions/checkout@v4
 
-      - name: 安装所有依赖
+      - name: 安装必要工具（不含 clang，系统已自带）
         run: |
-          xcode-select --install || true
-          brew install ldid dpkg clang
-          # 克隆 Theos 仅用于获取必要的头文件和库
-          git clone --depth 1 https://github.com/theos/theos.git $HOME/theos
+          xcode-select --install || true  # 确保命令行工具可用
+          brew install ldid dpkg  # 仅安装缺失的签名和打包工具
 
       - name: 准备编译环境
         run: |
-          # 确保系统 SDK 可用
+          # 获取系统内置 iOS SDK 路径（兼容 iOS 15）
           SDK_PATH=$(xcode-select -p)/Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS.sdk
           echo "SDK_PATH=$SDK_PATH" >> $GITHUB_ENV
           
-          # 复制 Theos 头文件（确保 Hook 函数可用）
+          # 克隆 Theos 获取头文件（用于 Logos 语法）
+          git clone --depth 1 https://github.com/theos/theos.git $HOME/theos
           cp -r $HOME/theos/vendor/include/* /usr/local/include/
           
-          # 准备 ElleKit 替代 substrate（iOS 15 兼容）
+          # 下载 ElleKit（替代 substrate，iOS 15 兼容）
           mkdir -p $HOME/lib
           curl -fL --insecure https://github.com/coolstar/ElleKit/releases/download/1.1.1/ElleKit.framework.zip -o $HOME/ElleKit.framework.zip
-          unzip $HOME/ElleKit.framework.zip -d $HOME/
+          unzip -q $HOME/ElleKit.framework.zip -d $HOME/
           cp $HOME/ElleKit.framework/ElleKit $HOME/lib/libsubstrate.dylib
           cp $HOME/ElleKit.framework/Headers/ElleKit.h /usr/local/include/substrate.h
 
-      - name: 手动编译插件
+      - name: 手动编译插件（使用系统自带 clang）
         run: |
-          # 编译动态库（直接指定所有参数）
+          # 直接调用系统 clang 编译（无需额外安装）
           clang -dynamiclib -arch arm64 -isysroot ${{ env.SDK_PATH }} \
           -framework Foundation -framework UIKit \
           -I/usr/local/include -L$HOME/lib \
