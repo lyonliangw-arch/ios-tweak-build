@@ -8,32 +8,35 @@ jobs:
       - name: 拉取代码
         uses: actions/checkout@v4
 
-      - name: 安装 Theos（官方源 + 系统依赖）
+      - name: 安装 Theos（完整克隆子模块）
         run: |
-          # 克隆 Theos（带重试机制）
-          git clone --recursive --depth 1 https://github.com/theos/theos.git $HOME/theos || \
-          git clone --recursive --depth 1 https://github.com/theos/theos.git $HOME/theos
+          # 完整克隆 Theos 及所有子模块（解决文件缺失）
+          git clone --recursive https://github.com/theos/theos.git $HOME/theos || \
+          git clone --recursive https://github.com/theos/theos.git $HOME/theos
           
-          # 安装系统自带的 make 工具（macOS 已预装，确保可用）
-          which make || brew install make
+          # 强制更新子模块（确保 master/tweak.mk 存在）
+          cd $HOME/theos && git submodule update --init --recursive
           
-          # 验证 Theos 核心目录存在
-          if [ ! -d "$HOME/theos/makefiles" ]; then
-            echo "Theos 核心文件缺失"
+          # 验证关键文件是否存在
+          if [ ! -f "$HOME/theos/makefiles/master/tweak.mk" ]; then
+            echo "错误：缺失 master/tweak.mk，请检查网络"
+            ls -R $HOME/theos/makefiles  # 打印目录辅助排查
             exit 1
           fi
           echo "Theos 安装成功"
 
-      - name: 安装 ldid（签名工具）
-        run: brew install ldid
-
-      - name: 编译插件（使用系统 make + Theos 路径）
+      - name: 安装依赖工具
         run: |
-          # 用系统 make，通过 THEOS 变量指定框架路径
+          brew install ldid  # 签名工具
+          brew install make  # 确保系统 make 可用
+
+      - name: 编译插件
+        run: |
+          # 显式传入 Theos 路径，确保 Makefile 正确解析
           make clean THEOS="$HOME/theos"
           make package THEOS="$HOME/theos"
 
-      - name: 上传产物
+      - name: 上传编译产物
         uses: actions/upload-artifact@v4
         with:
           name: tweak-deb
