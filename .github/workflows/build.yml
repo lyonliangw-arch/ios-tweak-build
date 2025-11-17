@@ -8,20 +8,40 @@ jobs:
       - name: 拉取代码
         uses: actions/checkout@v4
 
-      - name: 安装 Xcode 命令行工具（含 clang）
-        run: xcode-select --install || true  # 已安装则跳过
-
-      - name: 手动搭建编译环境（修复语法缩进）
+      - name: 安装依赖工具
         run: |
-          # 创建目录结构
-          mkdir -p $HOME/theos/makefiles/master
+          xcode-select --install || true
+          brew install ldid curl
+
+      - name: 手动搭建环境（强制添加 substrate 库）
+        run: |
+          # 创建完整目录（确保 lib 和 include 存在）
+          mkdir -p $HOME/theos/lib $HOME/theos/include $HOME/theos/makefiles/master
           
-          # 顶层 tweak.mk（硬编码绝对路径）
+          # 1. 强制下载 substrate 库（多源备份，确保成功）
+          # 源1：GitHub 备份
+          curl -fL https://github.com/xybp888/libsubstrate/releases/download/v1.0/libsubstrate.dylib -o $HOME/theos/lib/libsubstrate.dylib || \
+          # 源2：Gitee 镜像
+          curl -fL https://gitee.com/ios-tweak/libsubstrate/raw/master/libsubstrate.dylib -o $HOME/theos/lib/libsubstrate.dylib || \
+          # 下载失败则报错
+          (echo "substrate 库下载失败"; exit 1)
+          
+          # 2. 下载 substrate 头文件
+          curl -fL https://raw.githubusercontent.com/rpetrich/libsubstrate/master/substrate.h -o $HOME/theos/include/substrate.h || \
+          (echo "substrate.h 下载失败"; exit 1)
+          
+          # 3. 验证库文件是否存在
+          if [ ! -f "$HOME/theos/lib/libsubstrate.dylib" ]; then
+            echo "错误：libsubstrate.dylib 缺失"
+            ls $HOME/theos/lib  # 打印目录检查
+            exit 1
+          fi
+          
+          # 4. 编写 makefile（确保路径正确）
           cat > $HOME/theos/makefiles/tweak.mk << EOF
           include $HOME/theos/makefiles/master/tweak.mk
           EOF
           
-          # master/tweak.mk（核心编译逻辑，命令前用 Tab 缩进！）
           cat > $HOME/theos/makefiles/master/tweak.mk << EOF
           TWEAK_NAME ?= VirtualCamera
           \$(TWEAK_NAME)_FILES ?= Tweak.xm
@@ -29,7 +49,6 @@ jobs:
           \$(TWEAK_NAME)_LIBRARIES ?= substrate
           \$(TWEAK_NAME)_INSTALL_PATH = /Library/MobileSubstrate/DynamicLibraries
           
-          # 编译动态库（所有命令行前必须是 Tab，不是空格）
           all: \$(TWEAK_NAME).dylib
           \$(TWEAK_NAME).dylib: \$(\$(TWEAK_NAME)_FILES)
           	clang -dynamiclib -arch arm64 -isysroot \$(SDKROOT) \
@@ -38,7 +57,6 @@ jobs:
           	-l\$(\$(TWEAK_NAME)_LIBRARIES) \$(\$(TWEAK_NAME)_CFLAGS) \$^ -o \$@
           	ldid -S \$@
           
-          # 打包 deb（命令前同样用 Tab）
           package: \$(TWEAK_NAME).dylib
           	mkdir -p packages/DEBIAN
           	mkdir -p packages/\$(\$(TWEAK_NAME)_INSTALL_PATH)
@@ -47,16 +65,13 @@ jobs:
           	dpkg-deb -b packages \$(TWEAK_NAME)_1.0.0_iphoneos-arm64.deb
           EOF
           
-          # 安装签名工具
-          brew install ldid
-          
-          # 下载 iPhone 5s 适配的 SDK（iOS 12.4，最高支持版本）
+          # 5. 下载 iOS 12.4 SDK
           git clone --depth 1 https://github.com/xybp888/iOS-SDKs.git $HOME/iOS-SDKs
           echo "环境搭建完成"
 
-      - name: 编译插件（适配 iPhone 5s）
+      - name: 编译插件（显式指定库路径）
         run: |
-          make package THEOS="$HOME/theos" SDKROOT="$HOME/iOS-SDKs/iPhoneOS12.4.sdk"
+          make package THEOS="$HOME/theos" SDKROOT="$HOME/iOS-SDKs/iPhoneOS12.4.sdk" LDFLAGS="-L$HOME/theos/lib"
 
       - name: 上传产物
         uses: actions/upload-artifact@v4
