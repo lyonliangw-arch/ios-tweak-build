@@ -1,29 +1,34 @@
 name: Build Tweak
-on: [push]  # 推送代码后自动触发编译
+on: [push]
 
 jobs:
   build:
-    runs-on: macos-latest  # 必须用macOS，提供iOS SDK
+    runs-on: macos-latest
     steps:
       - name: 拉取代码
         uses: actions/checkout@v4
 
-      - name: 安装Theos
+      - name: 安装 Theos 并配置路径
         run: |
+          # 克隆 Theos 到指定目录
           git clone --recursive https://github.com/theos/theos.git $HOME/theos
+          # 强制写入环境变量（关键修复）
           echo "THEOS=$HOME/theos" >> $GITHUB_ENV
           echo "$HOME/theos/bin" >> $GITHUB_PATH
+          # 验证 Theos 路径是否正确
+          echo "Theos path: $THEOS"
+          ls $HOME/theos/makefiles  # 确认 tweak.mk 所在目录存在
 
-      - name: 安装ldid（签名工具）
+      - name: 安装 ldid
         run: brew install ldid
 
       - name: 编译插件
         run: |
           make clean
-          make package  # 生成.deb包
+          make package THEOS="$HOME/theos"  # 编译时显式指定 Theos 路径（双重保险）
 
-      - name: 上传编译产物
+      - name: 上传产物
         uses: actions/upload-artifact@v4
         with:
           name: tweak-deb
-          path: packages/*.deb  # 保存.deb文件
+          path: packages/*.deb
