@@ -8,38 +8,54 @@ jobs:
       - name: 拉取代码
         uses: actions/checkout@v4
 
-      - name: 手动搭建 Theos 核心环境
+      - name: 手动搭建完整 Theos 环境（硬编码路径）
         run: |
-          # 创建 Theos 基础目录
+          # 创建完整目录结构
           mkdir -p $HOME/theos/makefiles/master
           
-          # 手动写入关键文件 tweak.mk（从官方仓库提取的核心内容）
-          cat > $HOME/theos/makefiles/tweak.mk << 'EOF'
-          include $(THEOS_MAKE_PATH)/master/tweak.mk
+          # 1. 创建顶层 tweak.mk（直接指向 master/tweak.mk 的绝对路径）
+          cat > $HOME/theos/makefiles/tweak.mk << EOF
+          include $HOME/theos/makefiles/master/tweak.mk
           EOF
           
-          # 手动写入 master/tweak.mk（基础编译规则）
-          cat > $HOME/theos/makefiles/master/tweak.mk << 'EOF'
-          TWEAK_NAME ?= $(PROJECT_NAME)
-          $(TWEAK_NAME)_FILES ?= Tweak.xm
-          $(TWEAK_NAME)_FRAMEWORKS ?=
-          $(TWEAK_NAME)_LIBRARIES ?= substrate
-          include $(THEOS_MAKE_PATH)/instance.mk
-          after-install::
-              install.exec "killall -9 $(INSTALL_TARGET_PROCESSES)"
+          # 2. 创建 master/tweak.mk（基础编译规则，硬编码路径）
+          cat > $HOME/theos/makefiles/master/tweak.mk << EOF
+          TWEAK_NAME ?= VirtualCamera
+          \$(TWEAK_NAME)_FILES ?= Tweak.xm
+          \$(TWEAK_NAME)_CFLAGS ?= -fobjc-arc
+          \$(TWEAK_NAME)_LIBRARIES ?= substrate
+          \$(TWEAK_NAME)_INSTALL_PATH = /Library/MobileSubstrate/DynamicLibraries
+          
+          # 编译规则
+          all: \$(TWEAK_NAME).dylib
+          \$(TWEAK_NAME).dylib: \$(\$(TWEAK_NAME)_FILES)
+              clang -dynamiclib -arch arm64 -isysroot \$(SDKROOT) \
+              -framework Foundation -framework UIKit \
+              -L\$(THEOS)/lib -l\$(\$(TWEAK_NAME)_LIBRARIES) \
+              \$(\$(TWEAK_NAME)_CFLAGS) \$^ -o \$@
+              ldid -S \$@
+          
+          # 打包成 deb
+          package: \$(TWEAK_NAME).dylib
+              mkdir -p packages/DEBIAN
+              mkdir -p packages/\$(\$(TWEAK_NAME)_INSTALL_PATH)
+              cp \$(TWEAK_NAME).dylib packages/\$(\$(TWEAK_NAME)_INSTALL_PATH)/
+              cp control packages/DEBIAN/
+              dpkg-deb -b packages \$(TWEAK_NAME).deb
           EOF
           
-          # 安装依赖工具
-          brew install ldid make
-          echo "Theos 核心环境搭建完成"
+          # 3. 安装依赖
+          brew install ldid clang make
+          # 4. 下载 iOS SDK（确保编译时有头文件）
+          git clone --depth 1 https://github.com/xybp888/iOS-SDKs.git $HOME/iOS-SDKs
+          echo "环境搭建完成"
 
-      - name: 编译插件
+      - name: 编译插件（指定 SDK 路径）
         run: |
-          make clean THEOS="$HOME/theos"
-          make package THEOS="$HOME/theos"
+          make package THEOS="$HOME/theos" SDKROOT="$HOME/iOS-SDKs/iPhoneOS15.0.sdk"
 
       - name: 上传产物
         uses: actions/upload-artifact@v4
         with:
           name: tweak-deb
-          path: packages/*.deb
+          path: ./*.deb
