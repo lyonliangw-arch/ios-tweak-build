@@ -8,26 +8,25 @@ jobs:
       - name: 拉取代码
         uses: actions/checkout@v4
 
-      - name: 安装预编译 Theos（避免克隆问题）
+      - name: 安装 Theos（使用第三方镜像预编译包）
         run: |
-          # 下载预编译的 Theos 包（包含所有子模块，稳定可靠）
-          curl -L https://github.com/theos/theos/releases/download/20230505/theos.tar.xz -o $HOME/theos.tar.xz
-          # 解压到用户目录
-          mkdir -p $HOME/theos
-          tar -xJf $HOME/theos.tar.xz -C $HOME/theos
+          # 使用稳定的第三方 Theos 镜像（包含完整子模块）
+          git clone --recursive https://gitlab.com/ios-tweak-dev/theos.git $HOME/theos
           
-          # 验证关键文件是否存在（确保 master/tweak.mk 存在）
+          # 强制更新子模块（确保所有文件完整）
+          cd $HOME/theos && git submodule update --init --recursive --force
+          
+          # 验证关键文件
           if [ ! -f "$HOME/theos/makefiles/master/tweak.mk" ]; then
-            echo "错误：预编译包缺失关键文件"
+            echo "错误：缺失 master/tweak.mk"
             ls -R $HOME/theos/makefiles
             exit 1
           fi
           echo "Theos 安装成功"
 
-      - name: 安装依赖工具
+      - name: 安装依赖
         run: |
-          brew install ldid
-          brew install make
+          brew install ldid make
 
       - name: 编译插件
         run: |
