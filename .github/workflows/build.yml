@@ -8,40 +8,50 @@ jobs:
       - name: 拉取代码
         uses: actions/checkout@v4
 
-      - name: 安装基础工具
+      - name: 安装所有依赖
         run: |
           xcode-select --install || true
-          brew install ldid dpkg
+          brew install ldid dpkg clang
+          # 克隆 Theos 仅用于获取必要的头文件和库
+          git clone --depth 1 https://github.com/theos/theos.git $HOME/theos
 
-      - name: 安装 Theos 并使用内置兼容 SDK
+      - name: 准备编译环境
         run: |
-          # 克隆 Theos 主仓库
-          git clone --recursive https://github.com/theos/theos.git $HOME/theos
-          
-          # 使用 Theos 自带的最低兼容 iOS 15 的 SDK（自动处理版本）
-          # 若内置 SDK 缺失，则创建软链接指向系统现有 SDK
-          if [ ! -d "$HOME/theos/sdks" ]; then
-            mkdir -p $HOME/theos/sdks
-            # 链接系统中已有的 iOS SDK（可能高于 15，但兼容）
-            ln -s $(xcode-select -p)/Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS.sdk $HOME/theos/sdks/iPhoneOS15.0.sdk
-          fi
-          
-          # 强制确认 SDK 路径
-          SDK_PATH="$HOME/theos/sdks/iPhoneOS15.0.sdk"
-          if [ ! -d "$SDK_PATH" ]; then
-            echo "错误：无法找到可用的 iOS SDK，使用系统默认"
-            SDK_PATH=$(xcode-select -p)/Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS.sdk
-          fi
+          # 确保系统 SDK 可用
+          SDK_PATH=$(xcode-select -p)/Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS.sdk
           echo "SDK_PATH=$SDK_PATH" >> $GITHUB_ENV
+          
+          # 复制 Theos 头文件（确保 Hook 函数可用）
+          cp -r $HOME/theos/vendor/include/* /usr/local/include/
+          
+          # 准备 ElleKit 替代 substrate（iOS 15 兼容）
+          mkdir -p $HOME/lib
+          curl -fL --insecure https://github.com/coolstar/ElleKit/releases/download/1.1.1/ElleKit.framework.zip -o $HOME/ElleKit.framework.zip
+          unzip $HOME/ElleKit.framework.zip -d $HOME/
+          cp $HOME/ElleKit.framework/ElleKit $HOME/lib/libsubstrate.dylib
+          cp $HOME/ElleKit.framework/Headers/ElleKit.h /usr/local/include/substrate.h
 
-      - name: 编译插件（放宽版本校验）
+      - name: 手动编译插件
         run: |
-          # 忽略 SDK 版本严格匹配，强制编译
-          make clean THEOS="$HOME/theos"
-          make package THEOS="$HOME/theos" SDKROOT="${{ env.SDK_PATH }}" TARGET=iphone:clang:latest:15.0
+          # 编译动态库（直接指定所有参数）
+          clang -dynamiclib -arch arm64 -isysroot ${{ env.SDK_PATH }} \
+          -framework Foundation -framework UIKit \
+          -I/usr/local/include -L$HOME/lib \
+          -lsubstrate -fobjc-arc -x objective-c++ \
+          Tweak.xm -o VirtualCamera.dylib
+          
+          # 签名动态库
+          ldid -S VirtualCamera.dylib
+          
+          # 打包成 deb
+          mkdir -p packages/DEBIAN
+          mkdir -p packages/Library/MobileSubstrate/DynamicLibraries
+          cp VirtualCamera.dylib packages/Library/MobileSubstrate/DynamicLibraries/
+          cp control packages/DEBIAN/
+          dpkg-deb -b packages VirtualCamera_1.0.0_iphoneos-arm64.deb
 
       - name: 上传产物
         uses: actions/upload-artifact@v4
         with:
           name: ios15-tweak-deb
-          path: packages/*.deb
+          path: ./*.deb
