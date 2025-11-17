@@ -10,33 +10,35 @@ jobs:
 
       - name: 安装基础工具
         run: |
-          xcode-select --install || true  # 确保clang编译器可用
-          brew install ldid dpkg          # 签名工具和打包工具
+          xcode-select --install || true
+          brew install ldid dpkg
 
-      - name: 安装Theos（适配iOS 15）
+      - name: 安装 Theos（适配 iOS 15）
         run: |
-          # 克隆Theos主仓库（含最新适配）
           git clone --recursive https://github.com/theos/theos.git $HOME/theos
-          # 更新子模块（确保iOS 15支持文件完整）
           cd $HOME/theos && git submodule update --init --recursive
 
-      - name: 安装iOS 15 SDK
+      - name: 强制下载 iOS 15.0 SDK（直接指定压缩包）
         run: |
-          # 下载iOS 15.0 SDK（适配你的系统版本）
-          git clone --depth 1 https://github.com/xybp888/iOS-SDKs.git $HOME/iOS-SDKs
-          # 验证SDK是否存在
+          # 直接下载 iOS 15.0 SDK 压缩包（稳定链接）
+          mkdir -p $HOME/iOS-SDKs
+          curl -fL https://github.com/xybp888/iOS-SDKs/releases/download/15.0/iPhoneOS15.0.sdk.tar.xz -o $HOME/iOS-SDKs/iPhoneOS15.0.sdk.tar.xz
+          
+          # 解压 SDK
+          tar -xJf $HOME/iOS-SDKs/iPhoneOS15.0.sdk.tar.xz -C $HOME/iOS-SDKs
+          
+          # 验证 SDK 是否存在
           if [ ! -d "$HOME/iOS-SDKs/iPhoneOS15.0.sdk" ]; then
-            echo "错误：iOS 15 SDK 缺失"
+            echo "错误：iOS 15.0 SDK 解压失败"
             exit 1
           fi
 
-      - name: 编译插件（适配iOS 15）
+      - name: 编译插件（适配 iOS 15）
         run: |
-          # 显式指定Theos路径和SDK路径
           make clean THEOS="$HOME/theos"
           make package THEOS="$HOME/theos" SDKROOT="$HOME/iOS-SDKs/iPhoneOS15.0.sdk"
 
-      - name: 上传编译产物
+      - name: 上传产物
         uses: actions/upload-artifact@v4
         with:
           name: ios15-tweak-deb
