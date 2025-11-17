@@ -8,26 +8,34 @@ jobs:
       - name: 拉取代码
         uses: actions/checkout@v4
 
-      - name: 安装 Theos（国内镜像源，确保克隆成功）
+      - name: 安装 Theos（官方源 + 重试机制）
         run: |
-          # 改用 Gitee 镜像源，解决克隆失败问题
-          git clone --recursive https://gitee.com/ineo6/theos.git $HOME/theos
-          # 验证 Theos 是否安装成功（关键检查步骤）
-          if [ -d "$HOME/theos/bin" ]; then
-            echo "Theos 安装成功"
-            ls $HOME/theos/bin  # 列出 bin 目录，确认 make 存在
-          else
-            echo "Theos 安装失败！"
+          # 官方源 + 增加超时时间和重试次数，解决网络波动问题
+          git clone --recursive --depth 1 --single-branch https://github.com/theos/theos.git $HOME/theos || \
+          git clone --recursive --depth 1 --single-branch https://github.com/theos/theos.git $HOME/theos || \
+          git clone --recursive --depth 1 --single-branch https://github.com/theos/theos.git $HOME/theos
+          
+          # 验证 Theos 是否安装成功
+          if [ ! -f "$HOME/theos/bin/make" ]; then
+            echo "Theos 安装失败，未找到 make 工具"
             exit 1
           fi
-          # 安装 ldid
-          brew install ldid
+          echo "Theos 安装成功"
+
+      - name: 安装 ldid
+        run: brew install ldid
 
       - name: 编译插件
         run: |
-          # 用绝对路径调用 Theos 的 make 工具
+          # 显式指定 Theos 路径和 make 工具路径
           $HOME/theos/bin/make clean THEOS="$HOME/theos"
           $HOME/theos/bin/make package THEOS="$HOME/theos"
+
+      - name: 上传产物
+        uses: actions/upload-artifact@v4
+        with:
+          name: tweak-deb
+          path: packages/*.deb
 
       - name: 上传产物
         uses: actions/upload-artifact@v4
