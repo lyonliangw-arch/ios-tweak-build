@@ -1,9 +1,29 @@
-Package: com.lyonliangw.virtualcamera  # 唯一标识（替换为你的域名）
-Name: VirtualCamera  # 插件名称（与 Makefile 一致）
-Version: 1.0.0
-Architecture: iphoneos-arm64
-Description: 虚拟相机插件（在线编译测试）
-Depends: mobilesubstrate, preferenceloader  # 必选依赖
-Maintainer: lyonliangw
-Author: lyonliangw
-Section: Tweaks
+#import <UIKit/UIKit.h>
+#import <Foundation/Foundation.h>
+
+// 示例：iOS 15 适配的Hook代码（弹出提示框验证插件生效）
+%hook SpringBoard
+- (void)applicationDidFinishLaunching:(id)application {
+    %orig; // 调用原方法，不破坏系统逻辑
+
+    // iOS 15 适配的弹窗（使用UIAlertController）
+    dispatch_async(dispatch_get_main_queue(), ^{
+        UIAlertController *alert = [UIAlertController 
+            alertControllerWithTitle:@"插件生效" 
+            message:@"VirtualCamera已在iOS 15上加载" 
+            preferredStyle:UIAlertControllerStyleAlert];
+        
+        UIAlertAction *okAction = [UIAlertAction 
+            actionWithTitle:@"确定" 
+            style:UIAlertActionStyleDefault 
+            handler:nil];
+        
+        [alert addAction:okAction];
+        // 获取当前窗口的根控制器（iOS 15 适配）
+        UIWindow *keyWindow = [UIApplication sharedApplication].keyWindow;
+        [keyWindow.rootViewController presentViewController:alert 
+                                                   animated:YES 
+                                                 completion:nil];
+    });
+}
+%end
