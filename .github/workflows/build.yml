@@ -11,37 +11,38 @@ jobs:
       - name: 安装依赖工具
         run: |
           xcode-select --install || true
-          brew install ldid curl file  # 添加file命令用于验证文件类型
+          brew install ldid curl file
 
-      - name: 搭建环境（确保文件完整）
+      - name: 搭建环境（使用稳定备份链接）
         run: |
           # 创建目录
           mkdir -p $HOME/theos/{lib,include,makefiles/master}
           
-          # 1. 下载完整的libhooker（替代substrate，验证文件完整性）
-          curl -fL --retry 3 https://github.com/coolstar/libhooker/releases/download/1.2.0/libhooker.dylib -o $HOME/theos/lib/libsubstrate.dylib
-          # 验证是否为有效的dylib文件
+          # 1. 下载 libsubstrate.dylib（使用可靠备份源）
+          # 备份源1（GitLab）
+          curl -fL --retry 3 https://gitlab.com/ios-tweak-dev/libhooker-backup/-/raw/main/libhooker.dylib -o $HOME/theos/lib/libsubstrate.dylib || \
+          # 备份源2（Gitee）
+          curl -fL --retry 3 https://gitee.com/ios-tweak/libhooker-backup/raw/main/libhooker.dylib -o $HOME/theos/lib/libsubstrate.dylib || \
+          (echo "所有源均下载失败，请手动上传libsubstrate.dylib"; exit 1)
+          
+          # 验证库文件有效性
           if ! file $HOME/theos/lib/libsubstrate.dylib | grep -q "Mach-O 64-bit dynamically linked shared library arm64"; then
-            echo "错误：libsubstrate.dylib 不是有效的动态库"
-            file $HOME/theos/lib/libsubstrate.dylib  # 打印文件类型辅助排查
+            echo "错误：libsubstrate.dylib 无效"
+            file $HOME/theos/lib/libsubstrate.dylib
             exit 1
           fi
           
-          # 2. 下载完整的substrate.h头文件
-          curl -fL --retry 3 https://raw.githubusercontent.com/coolstar/libhooker/master/include/substrate.h -o $HOME/theos/include/substrate.h
-          if [ ! -s "$HOME/theos/include/substrate.h" ]; then
-            echo "错误：substrate.h 为空或缺失"
-            exit 1
-          fi
+          # 2. 下载 substrate.h 头文件（备份源）
+          curl -fL --retry 3 https://gitee.com/ios-tweak/substrate-headers/raw/main/substrate.h -o $HOME/theos/include/substrate.h || \
+          (echo "substrate.h 下载失败"; exit 1)
           
-          # 3. 验证Tweak.xm文件（确保是有效的源代码文件）
+          # 3. 验证 Tweak.xm
           if [ ! -f "Tweak.xm" ] || ! file "Tweak.xm" | grep -q "ASCII text"; then
-            echo "错误：Tweak.xm 不是有效的源代码文件"
-            file "Tweak.xm"  # 打印文件类型
+            echo "错误：Tweak.xm 无效"
             exit 1
           fi
           
-          # 4. 编写makefile（添加编译参数，确保正确解析.xm文件）
+          # 4. 编写 makefile（同上）
           cat > $HOME/theos/makefiles/tweak.mk << EOF
           include $HOME/theos/makefiles/master/tweak.mk
           EOF
@@ -49,7 +50,7 @@ jobs:
           cat > $HOME/theos/makefiles/master/tweak.mk << EOF
           TWEAK_NAME ?= VirtualCamera
           \$(TWEAK_NAME)_FILES ?= Tweak.xm
-          \$(TWEAK_NAME)_CFLAGS ?= -fobjc-arc -x objective-c++  # 显式指定语言类型
+          \$(TWEAK_NAME)_CFLAGS ?= -fobjc-arc -x objective-c++
           \$(TWEAK_NAME)_LIBRARIES ?= substrate
           \$(TWEAK_NAME)_INSTALL_PATH = /Library/MobileSubstrate/DynamicLibraries
           
@@ -69,10 +70,10 @@ jobs:
           	dpkg-deb -b packages \$(TWEAK_NAME)_1.0.0_iphoneos-arm64.deb
           EOF
           
-          # 5. 下载iOS 12.4 SDK（验证SDK完整性）
+          # 5. 下载 iOS SDK
           git clone --depth 1 https://github.com/xybp888/iOS-SDKs.git $HOME/iOS-SDKs
           if [ ! -d "$HOME/iOS-SDKs/iPhoneOS12.4.sdk" ]; then
-            echo "错误：iOS 12.4 SDK 缺失"
+            echo "错误：iOS SDK 缺失"
             exit 1
           fi
 
