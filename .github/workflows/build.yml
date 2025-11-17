@@ -8,34 +8,30 @@ jobs:
       - name: 拉取代码
         uses: actions/checkout@v4
 
-      - name: 安装 Theos（官方源 + 重试机制）
+      - name: 安装 Theos（官方源 + 系统依赖）
         run: |
-          # 官方源 + 增加超时时间和重试次数，解决网络波动问题
-          git clone --recursive --depth 1 --single-branch https://github.com/theos/theos.git $HOME/theos || \
-          git clone --recursive --depth 1 --single-branch https://github.com/theos/theos.git $HOME/theos || \
-          git clone --recursive --depth 1 --single-branch https://github.com/theos/theos.git $HOME/theos
+          # 克隆 Theos（带重试机制）
+          git clone --recursive --depth 1 https://github.com/theos/theos.git $HOME/theos || \
+          git clone --recursive --depth 1 https://github.com/theos/theos.git $HOME/theos
           
-          # 验证 Theos 是否安装成功
-          if [ ! -f "$HOME/theos/bin/make" ]; then
-            echo "Theos 安装失败，未找到 make 工具"
+          # 安装系统自带的 make 工具（macOS 已预装，确保可用）
+          which make || brew install make
+          
+          # 验证 Theos 核心目录存在
+          if [ ! -d "$HOME/theos/makefiles" ]; then
+            echo "Theos 核心文件缺失"
             exit 1
           fi
           echo "Theos 安装成功"
 
-      - name: 安装 ldid
+      - name: 安装 ldid（签名工具）
         run: brew install ldid
 
-      - name: 编译插件
+      - name: 编译插件（使用系统 make + Theos 路径）
         run: |
-          # 显式指定 Theos 路径和 make 工具路径
-          $HOME/theos/bin/make clean THEOS="$HOME/theos"
-          $HOME/theos/bin/make package THEOS="$HOME/theos"
-
-      - name: 上传产物
-        uses: actions/upload-artifact@v4
-        with:
-          name: tweak-deb
-          path: packages/*.deb
+          # 用系统 make，通过 THEOS 变量指定框架路径
+          make clean THEOS="$HOME/theos"
+          make package THEOS="$HOME/theos"
 
       - name: 上传产物
         uses: actions/upload-artifact@v4
