@@ -8,35 +8,33 @@ jobs:
       - name: 拉取代码
         uses: actions/checkout@v4
 
-      - name: 安装 Theos（完整克隆子模块）
+      - name: 安装预编译 Theos（避免克隆问题）
         run: |
-          # 完整克隆 Theos 及所有子模块（解决文件缺失）
-          git clone --recursive https://github.com/theos/theos.git $HOME/theos || \
-          git clone --recursive https://github.com/theos/theos.git $HOME/theos
+          # 下载预编译的 Theos 包（包含所有子模块，稳定可靠）
+          curl -L https://github.com/theos/theos/releases/download/20230505/theos.tar.xz -o $HOME/theos.tar.xz
+          # 解压到用户目录
+          mkdir -p $HOME/theos
+          tar -xJf $HOME/theos.tar.xz -C $HOME/theos
           
-          # 强制更新子模块（确保 master/tweak.mk 存在）
-          cd $HOME/theos && git submodule update --init --recursive
-          
-          # 验证关键文件是否存在
+          # 验证关键文件是否存在（确保 master/tweak.mk 存在）
           if [ ! -f "$HOME/theos/makefiles/master/tweak.mk" ]; then
-            echo "错误：缺失 master/tweak.mk，请检查网络"
-            ls -R $HOME/theos/makefiles  # 打印目录辅助排查
+            echo "错误：预编译包缺失关键文件"
+            ls -R $HOME/theos/makefiles
             exit 1
           fi
           echo "Theos 安装成功"
 
       - name: 安装依赖工具
         run: |
-          brew install ldid  # 签名工具
-          brew install make  # 确保系统 make 可用
+          brew install ldid
+          brew install make
 
       - name: 编译插件
         run: |
-          # 显式传入 Theos 路径，确保 Makefile 正确解析
           make clean THEOS="$HOME/theos"
           make package THEOS="$HOME/theos"
 
-      - name: 上传编译产物
+      - name: 上传产物
         uses: actions/upload-artifact@v4
         with:
           name: tweak-deb
