@@ -8,32 +8,35 @@ jobs:
       - name: 拉取代码
         uses: actions/checkout@v4
 
-      - name: 安装 Xcode 及内置 iOS SDK
+      - name: 安装基础工具
         run: |
-          # 安装 Xcode 13（包含 iOS 15 SDK，与 GitHub 环境兼容）
-          xcode-select -s /Applications/Xcode_13.app || true
-          # 验证 iOS 15 SDK 是否存在（Xcode 内置路径）
-          SDK_PATH="/Applications/Xcode_13.app/Contents/Developer/Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS15.0.sdk"
-          if [ ! -d "$SDK_PATH" ]; then
-            echo "错误：Xcode 未包含 iOS 15 SDK，尝试另一版本"
-            xcode-select -s /Applications/Xcode_13.2.1.app
-            SDK_PATH="/Applications/Xcode_13.2.1.app/Contents/Developer/Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS15.2.sdk"
-          fi
-          # 确认 SDK 路径有效
-          if [ ! -d "$SDK_PATH" ]; then
-            echo "错误：未找到 iOS 15 相关 SDK"
-            exit 1
-          fi
-          echo "找到 iOS SDK：$SDK_PATH"
-          echo "SDK_PATH=$SDK_PATH" >> $GITHUB_ENV  # 保存路径到环境变量
-
-      - name: 安装 Theos 及依赖
-        run: |
-          git clone --recursive https://github.com/theos/theos.git $HOME/theos
-          cd $HOME/theos && git submodule update --init --recursive
+          xcode-select --install || true
           brew install ldid dpkg
 
-      - name: 编译插件（使用 Xcode 内置 SDK）
+      - name: 安装 Theos 并自动下载 iOS 15 SDK
+        run: |
+          # 克隆 Theos 主仓库
+          git clone --recursive https://github.com/theos/theos.git $HOME/theos
+          
+          # 使用 Theos 自带的工具下载 iOS 15 SDK（自动适配环境）
+          $HOME/theos/bin/theos-sdk fetch iphoneos 15.0
+          
+          # 验证 SDK 是否下载成功
+          SDK_PATH="$HOME/theos/sdks/iPhoneOS15.0.sdk"
+          if [ ! -d "$SDK_PATH" ]; then
+            echo "错误：Theos 自动下载 iOS 15 SDK 失败，尝试 15.2 版本"
+            $HOME/theos/bin/theos-sdk fetch iphoneos 15.2
+            SDK_PATH="$HOME/theos/sdks/iPhoneOS15.2.sdk"
+          fi
+          
+          # 确认 SDK 存在
+          if [ ! -d "$SDK_PATH" ]; then
+            echo "错误：所有 iOS 15 SDK 版本均下载失败"
+            exit 1
+          fi
+          echo "SDK_PATH=$SDK_PATH" >> $GITHUB_ENV
+
+      - name: 编译插件
         run: |
           make clean THEOS="$HOME/theos"
           make package THEOS="$HOME/theos" SDKROOT="${{ env.SDK_PATH }}"
