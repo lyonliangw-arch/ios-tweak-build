@@ -8,25 +8,30 @@ jobs:
       - name: 拉取代码
         uses: actions/checkout@v4
 
-      - name: 安装 Theos（使用第三方镜像预编译包）
+      - name: 手动搭建 Theos 核心环境
         run: |
-          # 使用稳定的第三方 Theos 镜像（包含完整子模块）
-          git clone --recursive https://gitlab.com/ios-tweak-dev/theos.git $HOME/theos
+          # 创建 Theos 基础目录
+          mkdir -p $HOME/theos/makefiles/master
           
-          # 强制更新子模块（确保所有文件完整）
-          cd $HOME/theos && git submodule update --init --recursive --force
+          # 手动写入关键文件 tweak.mk（从官方仓库提取的核心内容）
+          cat > $HOME/theos/makefiles/tweak.mk << 'EOF'
+          include $(THEOS_MAKE_PATH)/master/tweak.mk
+          EOF
           
-          # 验证关键文件
-          if [ ! -f "$HOME/theos/makefiles/master/tweak.mk" ]; then
-            echo "错误：缺失 master/tweak.mk"
-            ls -R $HOME/theos/makefiles
-            exit 1
-          fi
-          echo "Theos 安装成功"
-
-      - name: 安装依赖
-        run: |
+          # 手动写入 master/tweak.mk（基础编译规则）
+          cat > $HOME/theos/makefiles/master/tweak.mk << 'EOF'
+          TWEAK_NAME ?= $(PROJECT_NAME)
+          $(TWEAK_NAME)_FILES ?= Tweak.xm
+          $(TWEAK_NAME)_FRAMEWORKS ?=
+          $(TWEAK_NAME)_LIBRARIES ?= substrate
+          include $(THEOS_MAKE_PATH)/instance.mk
+          after-install::
+              install.exec "killall -9 $(INSTALL_TARGET_PROCESSES)"
+          EOF
+          
+          # 安装依赖工具
           brew install ldid make
+          echo "Theos 核心环境搭建完成"
 
       - name: 编译插件
         run: |
