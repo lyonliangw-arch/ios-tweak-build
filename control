@@ -1,10 +1,9 @@
-Package: com.lyonliangw.virtualcamera
+Package: com.yourname.virtualcamera
 Name: VirtualCamera
-Version: 1.0.0
-Architecture: iphoneos-arm64
-Description: iOS 15 虚拟相机插件（测试版）
-Depends: org.swift.libswift, ellekit  # 依赖ElleKit（iOS 15+主流Hook库）
-Maintainer: lyonliangw
-Author: lyonliangw
+Version: 1.0-1
+Architecture: iphoneos-arm
+Description: A virtual camera for jailbroken devices, supporting HLS streams, local video, and EXIF metadata handling.
+Maintainer: Your Name <your.email@example.com>
+Author: Your Name
 Section: Tweaks
-Compatibility: iOS 15.0及以上
+Depends: mobilesubstrate  # 依赖 MobileSubstrate（必选）
