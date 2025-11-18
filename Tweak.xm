@@ -230,33 +230,3 @@ static AVSampleBufferDisplayLayer *g_previewLayer = nil;
 }
 
 %end
-Makefile
-ARCHS = arm64 arm64e
-TARGET = iphone:clang:latest:13.0
-
-THEOS_DEVICE_IP = localhost
-THEOS_DEVICE_PORT = 22
-
-include $(THEOS)/makefiles/common.mk
-
-TWEAK_NAME = VirtualCamera
-
-VirtualCamera_FILES = Tweak.xm
-VirtualCamera_FRAMEWORKS = UIKit AVFoundation CoreMedia MediaPlayer ImageIO
-
-include $(THEOS_MAKE_PATH)/tweak.mk
-
-after-install::
- install.exec "killall -9 SpringBoard"
-
-
-Control File (control)
-Package: com.yourname.virtualcamera
-Name: VirtualCamera
-Version: 1.0-1
-Architecture: iphoneos-arm
-Description: A virtual camera for jailbroken devices, supporting HLS streams, local video, and EXIF metadata handling.
-Maintainer: Your Name <your.email@example.com>
-Author: Your Name
-Section: Tweaks
-Depends: mobilesubstrate
